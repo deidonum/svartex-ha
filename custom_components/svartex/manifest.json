@@ -1,0 +1,12 @@
+{
+  "domain": "svartex",
+  "name": "Svartex EV Charger",
+  "codeowners": ["@deidonum"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/deidonum/svartex-ha",
+  "integration_type": "device",
+  "iot_class": "cloud_polling",
+  "requirements": ["aiohttp>=3.8.0"],
+  "version": "1.2.0"
+}
