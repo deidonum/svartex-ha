@@ -4,7 +4,7 @@ from homeassistant.core import HomeAssistant
 import aiohttp
 import async_timeout
 
-from .const import DOMAIN, CONF_STATION_INT, CONF_PASSWORD, GRAPHQL_URL
+from .const import DOMAIN, CONF_EMAIL, CONF_PASSWORD, GRAPHQL_URL
 
 class SvartexConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Svartex EV Charger."""
@@ -19,16 +19,16 @@ class SvartexConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 # Проверяем подключение с введенными данными
                 valid = await self._test_connection(
-                    user_input[CONF_STATION_INT],
+                    user_input[CONF_EMAIL],
                     user_input[CONF_PASSWORD]
                 )
                 if valid:
                     # Проверяем нет ли уже такой станции
-                    await self.async_set_unique_id(user_input[CONF_STATION_INT])
+                    await self.async_set_unique_id(user_input[CONF_EMAIL])
                     self._abort_if_unique_id_configured()
 
                     return self.async_create_entry(
-                        title=f"Svartex {user_input[CONF_STATION_INT]}",
+                        title=f"Svartex {user_input[CONF_EMAIL]}",
                         data=user_input
                     )
                 else:
@@ -39,9 +39,9 @@ class SvartexConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "unknown"
 
         data_schema = vol.Schema({
-            vol.Required(CONF_STATION_INT): str,
-            vol.Required(CONF_PASSWORD): str,
-        })
+        vol.Required(CONF_EMAIL): str,
+        vol.Required(CONF_PASSWORD): str,
+    })
 
         return self.async_show_form(
             step_id="user",
@@ -52,39 +52,34 @@ class SvartexConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }
         )
 
-    async def _test_connection(self, station_int: str, password: str) -> bool:
-        """Test if we can authenticate with the station."""
-        auth_query = """
-        mutation Authenticate($input: AuthInput!) {
-          authenticate(input: $input) {
-            token
-          }
+    async def _test_connection(self, email: str, password: str) -> bool:
+        login_mutation = """
+        mutation Login($input: LoginInput!) {
+        login(input: $input) {
+            accessToken
+            refreshToken
+        }
         }
         """
-        
-        variables = {
-            "input": {
-                "stationInt": station_int,
-                "password": password
-            }
-        }
-        
         try:
             async with async_timeout.timeout(10):
                 async with aiohttp.ClientSession() as session:
                     response = await session.post(
                         GRAPHQL_URL,
                         json={
-                            "operationName": "Authenticate",
-                            "query": auth_query,
-                            "variables": variables
+                            "operationName": "Login",
+                            "query": login_mutation,
+                            "variables": {
+                                "input": {
+                                    "email": email,
+                                    "password": password
+                                }
+                            }
                         }
                     )
                     result = await response.json()
-                    
                     if "errors" in result:
                         return False
-                    
-                    return "data" in result and "authenticate" in result["data"]
+                    return bool(result.get("data", {}).get("login", {}).get("accessToken"))
         except Exception:
             return False

@@ -3,10 +3,10 @@
 DOMAIN = "svartex"
 
 # GraphQL API endpoint
-GRAPHQL_URL = "https://monkfish-app-vlmld.ondigitalocean.app/graphql"
+GRAPHQL_URL = "https://direct-access.ladergy.com/graphql"
 
 # Configuration keys
-CONF_STATION_INT = "station_int"
+CONF_EMAIL = "email"
 CONF_PASSWORD = "password"
 
 # Station state mappings

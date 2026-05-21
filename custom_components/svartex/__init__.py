@@ -26,7 +26,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     session = async_get_clientsession(hass)
     api = SvartexAPI(
         session=session,
-        station_int=entry.data["station_int"],
+        email=entry.data["email"],
         password=entry.data["password"]
     )
     
