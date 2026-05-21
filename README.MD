@@ -16,8 +16,8 @@ Home Assistant integration for [Svartex](https://svartex.ua) EV chargers.
 ## Requirements
 
 - Svartex EV Charger connected to the internet
-- Station ID (e.g. `SVX-00000007777`)
-- Station password
+- Account email registered at [my.svartex.com](https://my.svartex.com)
+- Account password
 
 ## Installation
 
@@ -37,6 +37,17 @@ Home Assistant integration for [Svartex](https://svartex.ua) EV chargers.
 2. Restart Home Assistant
 3. Go to **Settings → Devices & Services → Add Integration**
 4. Search for **Svartex** and follow the setup steps
+
+## Configuration
+
+Enter your **my.svartex.com** account credentials:
+
+| Field | Description |
+|-------|-------------|
+| Email | Your account email (e.g. `user@example.com`) |
+| Password | Your account password |
+
+> **Note:** Starting from firmware `2.0.8`, Svartex switched to account-based authentication via `direct-access.ladergy.com`. The old Station ID + password login is no longer supported. Make sure you have a registered account at [my.svartex.com](https://my.svartex.com) before adding the integration.
 
 ## Entities
 
@@ -91,7 +102,15 @@ Home Assistant integration for [Svartex](https://svartex.ua) EV chargers.
 
 ## Tested devices
 
-- Svartex single-phase EV Charger (1ph)
+- Svartex single-phase EV Charger (1ph), firmware `2.0.8`
+
+## Upgrading from v1.x
+
+Version 2.0.0 introduces a breaking change in authentication. After updating:
+
+1. Go to **Settings → Devices & Services**
+2. Remove the existing Svartex integration
+3. Add it again and enter your **email and password** from [my.svartex.com](https://my.svartex.com)
 
 ## Contributing
 
