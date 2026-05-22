@@ -11,13 +11,15 @@ Home Assistant integration for [Svartex](https://svartex.ua) EV chargers.
 - Charging session tracking (energy, cost, time)
 - Two independent charging schedules with full control
 - WiFi signal and temperature monitoring
-- Device diagnostic information
+- Station diagnostic information
+- Supports online cloud mode and direct local IP mode
 
 ## Requirements
 
-- Svartex EV Charger connected to the internet
-- Account email registered at [my.svartex.com](https://my.svartex.com)
-- Account password
+- Svartex EV Charger on the network
+- Home Assistant with support for custom integrations
+- For online mode: registered account at [my.svartex.com](https://my.svartex.com)
+- For local mode: charger IP address accessible from Home Assistant
 
 ## Installation
 
@@ -40,21 +42,34 @@ Home Assistant integration for [Svartex](https://svartex.ua) EV chargers.
 
 ## Configuration
 
-Enter your **my.svartex.com** account credentials:
+During setup you can choose between two connection modes:
+
+- **Online (cloud)** — use your `email` and `password` for `my.svartex.com`
+- **Local (direct)** — use the charger IP address on your local network
+
+### Online mode
 
 | Field | Description |
 |-------|-------------|
 | Email | Your account email (e.g. `user@example.com`) |
 | Password | Your account password |
 
-> **Note:** Starting from firmware `2.0.8`, Svartex switched to account-based authentication via `direct-access.ladergy.com`. The old Station ID + password login is no longer supported. Make sure you have a registered account at [my.svartex.com](https://my.svartex.com) before adding the integration.
+> **Note:** Starting from firmware `2.0.8`, Svartex uses account-based authentication via `my.svartex.com`. The old Station ID + password login is no longer supported.
+
+### Local mode
+
+| Field | Description |
+|-------|-------------|
+| IP Address | Local IP address of the charger (e.g. `192.168.1.100`) |
+
+> **Note:** Local mode connects directly to the charger using its local GraphQL API. It does not require cloud credentials.
 
 ## Entities
 
 ### Sensors
 | Entity | Description |
 |--------|-------------|
-| Status | Charger state (Available, Charging, Finished, Error) |
+| Status | Charger state (Unknown, Preparing, Available, Charging, Finished, Error) |
 | Power | Current charging power (kW) |
 | Voltage L1/L2/L3 | Phase voltages (V) |
 | Current L1/L2/L3 | Phase currents (A) |
@@ -69,7 +84,6 @@ Enter your **my.svartex.com** account credentials:
 |--------|-------------|
 | Charging | True if charging is in progress |
 | Online | True if charger is online |
-| Session Active | True if charging session is active |
 
 ### Switches
 | Entity | Description |

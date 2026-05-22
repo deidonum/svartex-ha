@@ -7,9 +7,130 @@ from .const import GRAPHQL_URL
 
 _LOGGER = logging.getLogger(__name__)
 
+# Shared query string used by both cloud and local API
+STATION_DATA_QUERY = """
+query StationData {
+  stationData {
+    designedCurrent
+    minCurrent
+    stationState
+    stationSubState
+    isSessionStarted
+    stationCurrent
+    isChargerEnabled
+    totalEnergy
+    RSSI
+    isOnline
+    minVoltage
+    serialInt
+    mainFWVersion
+    wifiFWVersion
+    STA_IP_Addres
+    session {
+      sessionTime
+      sessionEnergy
+      sessionCost
+    }
+    measurements {
+      curMeasurement1
+      curMeasurement2
+      curMeasurement3
+      voltMeasurement1
+      voltMeasurement2
+      voltMeasurement3
+      powerMeasurement
+      temperature {
+        temperature1
+        temperature2
+      }
+    }
+    schedule {
+      schedule1Enabled
+      schedule2Enabled
+      schedule1Start
+      schedule1Stop
+      schedule2Start
+      schedule2Stop
+      schedule1CurrentEnabled
+      schedule1CurrentValue
+      schedule1EnergyEnabled
+      schedule1EnergyValue
+      schedule2CurrentEnabled
+      schedule2CurrentValue
+      schedule2EnergyEnabled
+      schedule2EnergyValue
+    }
+  }
+}
+"""
+
+# Local API uses same query but without isOnline (not available locally)
+STATION_DATA_QUERY_LOCAL = """
+query StationData {
+  stationData {
+    designedCurrent
+    minCurrent
+    stationState
+    stationSubState
+    isSessionStarted
+    isServerConnected
+    stationCurrent
+    isChargerEnabled
+    totalEnergy
+    RSSI
+    minVoltage
+    serialInt
+    mainFWVersion
+    wifiFWVersion
+    STA_IP_Addres
+    session {
+      sessionTime
+      sessionEnergy
+      sessionCost
+    }
+    measurements {
+      curMeasurement1
+      curMeasurement2
+      curMeasurement3
+      voltMeasurement1
+      voltMeasurement2
+      voltMeasurement3
+      powerMeasurement
+      temperature {
+        temperature1
+        temperature2
+      }
+    }
+    schedule {
+      schedule1Enabled
+      schedule2Enabled
+      schedule1Start
+      schedule1Stop
+      schedule2Start
+      schedule2Stop
+      schedule1CurrentEnabled
+      schedule1CurrentValue
+      schedule1EnergyEnabled
+      schedule1EnergyValue
+      schedule2CurrentEnabled
+      schedule2CurrentValue
+      schedule2EnergyEnabled
+      schedule2EnergyValue
+    }
+  }
+}
+"""
+
+UPDATE_MUTATION = """
+mutation UpdateStationData($input: StationDataInput!) {
+  updateStationData(input: $input)
+}
+"""
+
+
 class SvartexAPI:
-    """API client for Svartex charger."""
-    
+    """API client for Svartex charger (cloud mode)."""
+
     def __init__(self, session: aiohttp.ClientSession, email: str, password: str):
         self.session = session
         self.email = email
@@ -19,15 +140,14 @@ class SvartexAPI:
 
     async def authenticate(self):
         """Authenticate: check email, then login."""
-        
-        # Шаг 1 — проверка email (опционально, можно пропустить,
-        # но оставим для соответствия реальному флоу)
+
+        # Step 1 — verify email exists
         check_query = """
         query GetUserByEmail($email: String!) {
-        userByEmail(email: $email) {
+          userByEmail(email: $email) {
             id
             isUserVerified
-        }
+          }
         }
         """
         async with async_timeout.timeout(10):
@@ -43,13 +163,13 @@ class SvartexAPI:
             if "errors" in result or not result.get("data", {}).get("userByEmail"):
                 raise Exception(f"User not found for email: {self.email}")
 
-        # Шаг 2 — логин, получаем токены
+        # Step 2 — login, get tokens
         login_mutation = """
         mutation Login($input: LoginInput!) {
-        login(input: $input) {
+          login(input: $input) {
             accessToken
             refreshToken
-        }
+          }
         }
         """
         async with async_timeout.timeout(10):
@@ -69,7 +189,7 @@ class SvartexAPI:
             result = await response.json()
             if "errors" in result:
                 raise Exception(f"Login failed: {result['errors']}")
-            
+
             auth_data = result["data"]["login"]
             self.token = auth_data["accessToken"]
             self.refresh_token = auth_data["refreshToken"]
@@ -81,93 +201,18 @@ class SvartexAPI:
         if not self.token:
             await self.authenticate()
 
-        query = """
-        query StationData {
-          stationData {
-            designedCurrent
-            minCurrent
-            stationState
-            stationSubState
-            isSessionStarted
-            stationCurrent
-            isChargerEnabled
-            totalEnergy
-            RSSI
-            isOnline
-            minVoltage
-            serialInt
-            mainFWVersion
-            wifiFWVersion
-            STA_IP_Addres
-            session {
-              sessionTime
-              sessionEnergy
-              sessionCost
-            }
-            measurements {
-              curMeasurement1
-              curMeasurement2
-              curMeasurement3            
-              voltMeasurement1
-              voltMeasurement2
-              voltMeasurement3
-              powerMeasurement
-              temperature {
-                temperature1
-                temperature2
-              }
-            }
-            schedule {
-              schedule1Enabled
-              schedule2Enabled
-              schedule1Start
-              schedule1Stop
-              schedule2Start
-              schedule2Stop
-              schedule1CurrentValue
-              schedule2CurrentValue
-            }
-          }
-        }
-        """
-        
-        _LOGGER.debug("📡 GET DATA REQUEST")
-        data = await self._send_graphql_query(query)
-        _LOGGER.debug("📡 GET DATA RESPONSE - schedule1Enabled: %s", 
-                     data.get("stationData", {}).get("schedule", {}).get("schedule1Enabled"))
+        _LOGGER.debug("GET DATA REQUEST (cloud)")
+        data = await self._send_graphql_query(STATION_DATA_QUERY)
         return data.get("stationData", {})
 
     async def update_station_data(self, input_data: Dict[str, Any]) -> bool:
-        """Update station data (for schedules)."""
-        _LOGGER.debug("🔄 UPDATE REQUEST: %s", input_data)
-        
-        mutation = """
-        mutation UpdateStationData($input: StationDataInput!) {
-          updateStationData(input: $input)
-        }
-        """
-        
-        variables = {
-            "input": input_data
-        }
-
-        payload = {
-            "operationName": "UpdateStationData",
-            "query": mutation,
-            "variables": variables
-        }
-        
-        _LOGGER.debug("🔄 UPDATE PAYLOAD: %s", payload)
-        
+        """Update station data."""
+        _LOGGER.debug("UPDATE REQUEST: %s", input_data)
         try:
-            result = await self._send_graphql_query(mutation, variables)
-            _LOGGER.debug("🔄 UPDATE RESPONSE: %s", result)
-            
-            success = result.get("updateStationData", False)
-            _LOGGER.debug("🔄 UPDATE RESULT: %s", success)
-            return bool(success)
+            result = await self._send_graphql_query(UPDATE_MUTATION, {"input": input_data})
+            return bool(result.get("updateStationData", False))
         except Exception as err:
-            _LOGGER.error("🔄 UPDATE ERROR: %s", err)
+            _LOGGER.error("UPDATE ERROR: %s", err)
             return False
 
     async def _send_graphql_query(self, query: str, variables: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -179,14 +224,12 @@ class SvartexAPI:
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json"
         }
-        
+
         payload = {
             "query": query,
             "variables": variables or {}
         }
-        
-        _LOGGER.debug("🌐 SENDING GRAPHQL: %s", payload)
-        
+
         try:
             async with async_timeout.timeout(10):
                 response = await self.session.post(
@@ -195,17 +238,75 @@ class SvartexAPI:
                     headers=headers
                 )
                 result = await response.json()
-                _LOGGER.debug("🌐 GRAPHQL RESPONSE: %s", result)
-                
+
                 if "errors" in result:
-                    _LOGGER.error("🌐 GRAPHQL ERRORS: %s", result["errors"])
-                    # Token might be expired, try to reauthenticate once
+                    _LOGGER.error("GRAPHQL ERRORS: %s", result["errors"])
                     await self.authenticate()
                     raise Exception(f"GraphQL error: {result['errors']}")
-                
+
                 return result["data"]
-                
+
         except Exception as err:
-            _LOGGER.error("🌐 GRAPHQL ERROR: %s", err)
-            self.token = None  # Reset token on error
+            _LOGGER.error("GRAPHQL ERROR: %s", err)
+            self.token = None
+            raise
+
+
+class SvartexLocalAPI:
+    """API client for Svartex charger (local direct access, no auth)."""
+
+    def __init__(self, session: aiohttp.ClientSession, ip_address: str):
+        self.session = session
+        self.ip_address = ip_address
+
+    @property
+    def graphql_url(self):
+        return f"http://{self.ip_address}/graphql"
+
+    async def get_station_data(self) -> Dict[str, Any]:
+        """Get station data directly from charger."""
+        _LOGGER.debug("GET DATA REQUEST (local) -> %s", self.graphql_url)
+        data = await self._send_graphql_query(STATION_DATA_QUERY_LOCAL)
+        raw = data.get("stationData", {})
+
+        # Map isServerConnected → isOnline so the rest of the integration
+        # (binary_sensor etc.) works identically in both modes
+        raw.setdefault("isOnline", raw.get("isServerConnected", False))
+
+        return raw
+
+    async def update_station_data(self, input_data: Dict[str, Any]) -> bool:
+        """Update station data."""
+        _LOGGER.debug("UPDATE REQUEST (local): %s", input_data)
+        try:
+            result = await self._send_graphql_query(UPDATE_MUTATION, {"input": input_data})
+            return bool(result.get("updateStationData", False))
+        except Exception as err:
+            _LOGGER.error("UPDATE ERROR (local): %s", err)
+            return False
+
+    async def _send_graphql_query(self, query: str, variables: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Send GraphQL query — no Authorization header needed."""
+        payload = {
+            "query": query,
+            "variables": variables or {}
+        }
+
+        try:
+            async with async_timeout.timeout(10):
+                response = await self.session.post(
+                    self.graphql_url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"}
+                )
+                result = await response.json()
+
+                if "errors" in result:
+                    _LOGGER.error("GRAPHQL ERRORS (local): %s", result["errors"])
+                    raise Exception(f"GraphQL error: {result['errors']}")
+
+                return result["data"]
+
+        except Exception as err:
+            _LOGGER.error("GRAPHQL ERROR (local): %s", err)
             raise
