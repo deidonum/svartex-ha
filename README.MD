@@ -60,7 +60,7 @@ During setup you can choose between two connection modes:
 
 | Field | Description |
 |-------|-------------|
-| IP Address | Local IP address of the charger (e.g. `192.168.1.100`) |
+| IP Address | Local IP address of the charger (e.g. `192.168.1.100`) NOT YET WORKING|
 
 > **Note:** Local mode connects directly to the charger using its local GraphQL API. It does not require cloud credentials.
 

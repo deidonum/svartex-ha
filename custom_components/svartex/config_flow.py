@@ -2,8 +2,10 @@ import voluptuous as vol
 from homeassistant import config_entries
 import aiohttp
 import async_timeout
-import asyncio
 import logging
+from .api import STATION_DATA_QUERY_LOCAL
+
+_LOGGER = logging.getLogger(__name__)
 
 from .const import (
     DOMAIN,
@@ -134,54 +136,27 @@ class SvartexConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return False
 
     async def _test_local(self, ip_address: str) -> bool:
-        """Test local connection by fetching stationData."""
-        query = """
-        query StationData {
-          stationData {
-            serialInt
-          }
-        }
-        """
-        url = f"http://{ip_address}/graphql"
+        """Test local connection by fetching full stationData."""
         try:
             async with async_timeout.timeout(10):
                 async with aiohttp.ClientSession() as session:
                     response = await session.post(
-                        url,
-                        json={"query": query},
+                        f"http://{ip_address}/graphql",
+                        json={
+                            "operationName": "StationData",
+                            "variables": {},
+                            "query": STATION_DATA_QUERY_LOCAL  # Используем унифицированный запрос
+                        },
                         headers={"Content-Type": "application/json"}
                     )
+                    
+                    response.raise_for_status()
                     result = await response.json()
-                    has_serial = bool(
+                    
+                    # Если вернулся serialInt, значит весь большой парсинг прошел успешно
+                    return bool(
                         result.get("data", {}).get("stationData", {}).get("serialInt")
                     )
-                    if not has_serial:
-                        _LOGGER.error(
-                            "Local connection test to %s returned no serial. Response: %s",
-                            url, result
-                        )
-                    return has_serial
-        except asyncio.TimeoutError:
-            _LOGGER.error(
-                "Local connection test to %s timed out after 10 seconds. Check IP address and network connectivity.",
-                url
-            )
-            return False
-        except aiohttp.ClientConnectionError as err:
-            _LOGGER.error(
-                "Local connection test to %s failed: cannot connect. Check IP address is correct and charger is online.",
-                url, exc_info=err
-            )
-            return False
-        except aiohttp.ClientError as err:
-            _LOGGER.error(
-                "Local connection test to %s failed: HTTP error.",
-                url, exc_info=err
-            )
-            return False
         except Exception as err:
-            _LOGGER.error(
-                "Local connection test to %s failed: unexpected error.",
-                url, exc_info=err
-            )
+            _LOGGER.error("Local connection test failed for %s: %s", ip_address, err)
             return False
