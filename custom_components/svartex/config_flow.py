@@ -2,6 +2,10 @@ import voluptuous as vol
 from homeassistant import config_entries
 import aiohttp
 import async_timeout
+import logging
+from .api import STATION_DATA_QUERY_LOCAL
+
+_LOGGER = logging.getLogger(__name__)
 
 from .const import (
     DOMAIN,
@@ -130,25 +134,27 @@ class SvartexConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return False
 
     async def _test_local(self, ip_address: str) -> bool:
-        """Test local connection by fetching stationData."""
-        query = """
-        query StationData {
-          stationData {
-            serialInt
-          }
-        }
-        """
+        """Test local connection by fetching full stationData."""
         try:
             async with async_timeout.timeout(5):
                 async with aiohttp.ClientSession() as session:
                     response = await session.post(
                         f"http://{ip_address}/graphql",
-                        json={"query": query},
+                        json={
+                            "operationName": "StationData",
+                            "variables": {},
+                            "query": STATION_DATA_QUERY_LOCAL  # Используем унифицированный запрос
+                        },
                         headers={"Content-Type": "application/json"}
                     )
+                    
+                    response.raise_for_status()
                     result = await response.json()
+                    
+                    # Если вернулся serialInt, значит весь большой парсинг прошел успешно
                     return bool(
                         result.get("data", {}).get("stationData", {}).get("serialInt")
                     )
-        except Exception:
+        except Exception as err:
+            _LOGGER.error("Local connection test failed for %s: %s", ip_address, err)
             return False

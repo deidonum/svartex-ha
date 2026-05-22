@@ -287,9 +287,14 @@ class SvartexLocalAPI:
 
     async def _send_graphql_query(self, query: str, variables: Dict[str, Any] = None) -> Dict[str, Any]:
         """Send GraphQL query — no Authorization header needed."""
+        
+        # Автоматически определяем имя операции для payload
+        operation_name = "StationData" if "query StationData" in query else "UpdateStationData"
+        
         payload = {
-            "query": query,
-            "variables": variables or {}
+            "operationName": operation_name,
+            "variables": variables or {},
+            "query": query
         }
 
         try:
@@ -297,8 +302,24 @@ class SvartexLocalAPI:
                 response = await self.session.post(
                     self.graphql_url,
                     json=payload,
-                    headers={"Content-Type": "application/json"}
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json" # Явно просим вернуть JSON
+                    }
                 )
+                
+                # Если сервер вернул ошибку и это HTML (HTTP 500), логируем текст!
+                if response.content_type != "application/json":
+                    error_html = await response.text()
+                    _LOGGER.error(
+                        "Local API Error: Expected JSON but got %s. HTTP %s. Body: %s", 
+                        response.content_type, 
+                        response.status, 
+                        error_html[:300] # Выводим первые 300 символов страницы ошибки
+                    )
+                    # Выбрасываем ошибку, чтобы координатор ушел в retry
+                    response.raise_for_status() 
+
                 result = await response.json()
 
                 if "errors" in result:
