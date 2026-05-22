@@ -2,6 +2,8 @@ import voluptuous as vol
 from homeassistant import config_entries
 import aiohttp
 import async_timeout
+import asyncio
+import logging
 
 from .const import (
     DOMAIN,
@@ -9,6 +11,8 @@ from .const import (
     MODE_ONLINE, MODE_LOCAL,
     GRAPHQL_URL
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class SvartexConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -138,17 +142,46 @@ class SvartexConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
           }
         }
         """
+        url = f"http://{ip_address}/graphql"
         try:
-            async with async_timeout.timeout(5):
+            async with async_timeout.timeout(10):
                 async with aiohttp.ClientSession() as session:
                     response = await session.post(
-                        f"http://{ip_address}/graphql",
+                        url,
                         json={"query": query},
                         headers={"Content-Type": "application/json"}
                     )
                     result = await response.json()
-                    return bool(
+                    has_serial = bool(
                         result.get("data", {}).get("stationData", {}).get("serialInt")
                     )
-        except Exception:
+                    if not has_serial:
+                        _LOGGER.error(
+                            "Local connection test to %s returned no serial. Response: %s",
+                            url, result
+                        )
+                    return has_serial
+        except asyncio.TimeoutError:
+            _LOGGER.error(
+                "Local connection test to %s timed out after 10 seconds. Check IP address and network connectivity.",
+                url
+            )
+            return False
+        except aiohttp.ClientConnectionError as err:
+            _LOGGER.error(
+                "Local connection test to %s failed: cannot connect. Check IP address is correct and charger is online.",
+                url, exc_info=err
+            )
+            return False
+        except aiohttp.ClientError as err:
+            _LOGGER.error(
+                "Local connection test to %s failed: HTTP error.",
+                url, exc_info=err
+            )
+            return False
+        except Exception as err:
+            _LOGGER.error(
+                "Local connection test to %s failed: unexpected error.",
+                url, exc_info=err
+            )
             return False
